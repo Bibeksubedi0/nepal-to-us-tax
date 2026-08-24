@@ -107,7 +107,7 @@ const PaymentModal = ({ open, onOpenChange, studentId, onSubmitted }: Props) => 
       const { error: upErr } = await supabase.storage
         .from("payment-proofs").upload(path, proofFile);
       if (upErr) throw upErr;
-      const { data: urlData } = supabase.storage.from("payment-proofs").getPublicUrl(path);
+      const { data: urlData, error: urlError } = await supabase.storage.from("payment-proofs").createSignedUrl(path, 60 * 60); if (urlError) throw urlError; const proofUrl = urlData.signedUrl;
 
       const newRef = generateRefId();
       const installNum = plan === "full" ? 1 : installmentNumber;
@@ -117,7 +117,7 @@ const PaymentModal = ({ open, onOpenChange, studentId, onSubmitted }: Props) => 
         payment_method: method,
         transaction_reference: newRef,
         installment_number: installNum,
-        proof_url: urlData.publicUrl,
+        proof_url: proofUrl,
         payment_date: new Date().toISOString(),
       }).select("id").single();
       if (error) throw error;
@@ -137,7 +137,7 @@ const PaymentModal = ({ open, onOpenChange, studentId, onSubmitted }: Props) => 
             is_full: plan === "full",
             date: new Date().toLocaleString(),
             payment_method: method,
-            proof_url: urlData.publicUrl,
+            proof_url: proofUrl,
           },
         };
         // Fire both emails (don't block UI on errors)
@@ -344,3 +344,4 @@ const PaymentModal = ({ open, onOpenChange, studentId, onSubmitted }: Props) => 
 };
 
 export default PaymentModal;
+
