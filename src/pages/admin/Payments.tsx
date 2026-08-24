@@ -11,9 +11,9 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Search, CheckCircle, XCircle, Eye, Trash2, ChevronDown, ChevronRight,
-  AlertTriangle, FileText, Upload,
+  AlertTriangle, FileText, Upload, Pencil,
 } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
@@ -36,7 +36,7 @@ interface PaymentWithStudent {
   rejection_reason: string | null;
   created_at: string;
   student_id: string;
-  students: { full_name: string; email: string; phone: string | null; payment_plan: string | null; batch_id: string | null } | null;
+  students: { full_name: string; email: string; phone: string | null; payment_plan: string | null; batch_id: string | null; custom_fee: number | null } | null;
 }
 
 interface StudentGroup {
@@ -55,6 +55,7 @@ interface StudentGroup {
   balance: number;
   overallStatus: "fully_paid" | "partially_paid" | "pending" | "rejected";
   batchId: string | null;
+  customFee: number | null;
 }
 
 const statusBadge: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
@@ -73,7 +74,10 @@ const overallBadge = (s: StudentGroup["overallStatus"]) => {
   }
 };
 
-const fmt = (n: number) => `NPR ${Number(n).toLocaleString()}`;
+const fmt = (n: number) => `NPR ${Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+// Fees are VAT-inclusive: VAT is extracted out of the total (13/113), never added on top.
+const vatOf = (total: number) => Math.round(total * (13 / 113) * 100) / 100;
+const exVatOf = (total: number) => Math.round((total - vatOf(total)) * 100) / 100;
 
 const Payments = () => {
   const [payments, setPayments] = useState<PaymentWithStudent[]>([]);
@@ -90,6 +94,31 @@ const Payments = () => {
   const [invoiceGroup, setInvoiceGroup] = useState<StudentGroup | null>(null);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadStudentId, setUploadStudentId] = useState<string | null>(null);
+  const [feeGroup, setFeeGroup] = useState<StudentGroup | null>(null);
+  const [feeValue, setFeeValue] = useState("");
+  const [savingFee, setSavingFee] = useState(false);
+
+  const openFeeDialog = (g: StudentGroup) => {
+    setFeeGroup(g);
+    setFeeValue(g.customFee !== null ? String(g.customFee) : String(g.expected));
+  };
+
+  const saveFee = async (reset = false) => {
+    if (!feeGroup) return;
+    const value = reset ? null : Number(feeValue);
+    if (!reset && (!Number.isFinite(value as number) || (value as number) < 0)) {
+      toast.error("Enter a valid amount"); return;
+    }
+    setSavingFee(true);
+    const { error } = await supabase.from("students")
+      .update({ custom_fee: value })
+      .eq("id", feeGroup.studentId);
+    setSavingFee(false);
+    if (error) { toast.error("Failed to update fee"); return; }
+    toast.success(reset ? "Fee reset to standard" : "Fee updated");
+    setFeeGroup(null);
+    fetchPayments();
+  };
 
   const resolveProofUrl = async (rawUrl: string | null): Promise<string | null> => {
     if (!rawUrl) return null;
@@ -108,7 +137,7 @@ const Payments = () => {
     setLoading(true);
     const { data } = await supabase
       .from("payments")
-      .select("*, students(full_name, email, phone, payment_plan, batch_id)")
+      .select("*, students(full_name, email, phone, payment_plan, batch_id, custom_fee)")
       .order("created_at", { ascending: false });
     const rows = (data as unknown as PaymentWithStudent[]) || [];
     const resolved = await Promise.all(
@@ -148,8 +177,12 @@ const Payments = () => {
         studentPlan === "full" ? "full" :
         (sorted.length > 1 || maxInstallment > 1 ? "installment" : "full");
       const installmentCount = plan === "installment" ? Math.max(2, maxInstallment) : 1;
-      const expected = expectedTotal(plan);
-      const expectedPer = expectedPerInstallment(plan, installmentCount);
+      const rawCustomFee = first.students?.custom_fee;
+      const customFee = rawCustomFee === null || rawCustomFee === undefined ? null : Number(rawCustomFee);
+      const expected = customFee !== null ? customFee : expectedTotal(plan);
+      const expectedPer = customFee !== null
+        ? Math.round((customFee / Math.max(1, installmentCount)) * 100) / 100
+        : expectedPerInstallment(plan, installmentCount);
       const totalPaid = sorted
         .filter(p => p.status === "verified")
         .reduce((s, p) => s + Number(p.amount), 0);
@@ -173,6 +206,7 @@ const Payments = () => {
         plan, installmentCount, expected, expectedPer,
         totalPaid, pendingTotal, balance, overallStatus,
         batchId: first.students?.batch_id || null,
+        customFee,
       });
     }
     // Most-recently-active groups first
@@ -348,17 +382,21 @@ const Payments = () => {
                             <div className="font-semibold truncate">{group.name}</div>
                             <Badge className={cn("border-0", oBadge.className)}>{oBadge.label}</Badge>
                             <Badge variant="outline" className="text-xs">{group.plan === "installment" ? `Installment · ${group.installmentCount}x` : "Full Payment"}</Badge>
+                            {group.customFee !== null && <Badge variant="outline" className="text-xs">Custom fee</Badge>}
                           </div>
                           <div className="text-xs text-muted-foreground truncate">{group.email}</div>
-                          <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                            <div><div className="text-xs text-muted-foreground">Expected</div><div className="font-medium">{fmt(group.expected)}</div></div>
-                            <div><div className="text-xs text-muted-foreground">Paid</div><div className="font-medium text-emerald-600">{fmt(group.totalPaid)}</div></div>
-                            <div><div className="text-xs text-muted-foreground">Pending</div><div className="font-medium text-amber-600">{fmt(group.pendingTotal)}</div></div>
-                            <div><div className="text-xs text-muted-foreground">Balance Due</div><div className={cn("font-medium", group.balance > 0 ? "text-destructive" : "text-emerald-600")}>{fmt(group.balance)}</div></div>
+                          <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
+                            <span className="text-muted-foreground">Expected: <span className="font-semibold text-foreground">{fmt(group.expected)}</span></span>
+                            <span className="text-muted-foreground">Paid: <span className="font-semibold text-emerald-600">{fmt(group.totalPaid)}</span></span>
+                            <span className="text-muted-foreground">Pending: <span className="font-semibold text-amber-600">{fmt(group.pendingTotal)}</span></span>
+                            <span className="text-muted-foreground">Balance: <span className={cn("font-semibold", group.balance > 0 ? "text-destructive" : "text-emerald-600")}>{fmt(group.balance)}</span></span>
                           </div>
-                          <div className="mt-2"><Progress value={progress} className="h-1.5" /></div>
+                          <Progress value={progress} className="h-1.5 mt-2" />
                         </div>
-                        <div className="flex items-center gap-2 shrink-0" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end" onClick={e => e.stopPropagation()}>
+                          <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); openFeeDialog(group); }}>
+                            <Pencil className="w-4 h-4 mr-1.5" /> Adjust Fee
+                          </Button>
                           <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); setUploadStudentId(group.studentId); setUploadOpen(true); }}>
                             <Upload className="w-4 h-4 mr-1.5" /> Upload
                           </Button>
@@ -552,7 +590,44 @@ const Payments = () => {
           plan={invoiceGroup?.plan || "full"}
           payments={invoiceGroup?.payments || []}
           totalPaid={invoiceGroup?.totalPaid || 0}
+          expected={invoiceGroup?.expected}
         />
+
+        {/* Adjust Fee Dialog */}
+        <Dialog open={!!feeGroup} onOpenChange={(o) => !o && setFeeGroup(null)}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Adjust fee</DialogTitle>
+              <DialogDescription>{feeGroup?.name} — {feeGroup?.email}</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Total fee, VAT inclusive (NPR)</label>
+                <Input
+                  type="number" min={0} step={100}
+                  value={feeValue}
+                  onChange={e => setFeeValue(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Standard fee is {fmt(FULL_TOTAL)}. A custom amount applies to this student only.
+                </p>
+              </div>
+              {Number.isFinite(Number(feeValue)) && Number(feeValue) > 0 && (
+                <div className="rounded-lg border border-border bg-muted/40 p-3 space-y-1.5 text-sm">
+                  <div className="flex justify-between"><span className="text-muted-foreground">Amount excl. VAT</span><span className="font-medium tabular-nums">{fmt(exVatOf(Number(feeValue)))}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">VAT 13% (included)</span><span className="font-medium tabular-nums">{fmt(vatOf(Number(feeValue)))}</span></div>
+                  <div className="flex justify-between border-t border-border pt-1.5"><span className="font-medium">Total payable</span><span className="font-semibold tabular-nums">{fmt(Number(feeValue))}</span></div>
+                </div>
+              )}
+            </div>
+            <DialogFooter className="gap-2">
+              {feeGroup?.customFee !== null && (
+                <Button variant="outline" disabled={savingFee} onClick={() => saveFee(true)}>Reset to standard</Button>
+              )}
+              <Button disabled={savingFee} onClick={() => saveFee(false)}>Save fee</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Upload Payment Dialog */}
         <UploadPaymentDialog

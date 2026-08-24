@@ -1232,6 +1232,7 @@ export type Database = {
           background: string | null
           batch_id: string | null
           created_at: string
+          custom_fee: number | null
           email: string
           full_name: string
           id: string
@@ -1248,6 +1249,7 @@ export type Database = {
           background?: string | null
           batch_id?: string | null
           created_at?: string
+          custom_fee?: number | null
           email: string
           full_name: string
           id?: string
@@ -1264,6 +1266,7 @@ export type Database = {
           background?: string | null
           batch_id?: string | null
           created_at?: string
+          custom_fee?: number | null
           email?: string
           full_name?: string
           id?: string

@@ -218,7 +218,11 @@ const StudentExams = () => {
             <Clock className="w-3 h-3 mr-1" /> {mmss(Math.max(secondsLeft, 0))}
           </Badge>
         </div>
-        {active.description && <p className="text-sm text-muted-foreground">{active.description}</p>}
+        {active.description && (
+          <Card className="p-4 bg-muted/40">
+            <p className="text-sm text-muted-foreground whitespace-pre-wrap break-words leading-relaxed">{active.description}</p>
+          </Card>
+        )}
         {questions.map((q, idx) => (
           <Card key={q.id} className="p-4 space-y-3">
             <p className="font-medium">
@@ -277,7 +281,7 @@ const StudentExams = () => {
               <Card key={e.id} className="p-4 flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <p className="font-semibold">{e.title}</p>
-                  {e.description && <p className="text-sm text-muted-foreground mt-1">{e.description}</p>}
+                  {e.description && <p className="text-sm text-muted-foreground mt-1 whitespace-pre-wrap break-words leading-relaxed">{e.description}</p>}
                   <p className="text-xs text-muted-foreground mt-2">
                     {e.duration_minutes} minutes · pass mark {e.pass_percentage}%
                   </p>

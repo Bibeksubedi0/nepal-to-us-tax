@@ -376,7 +376,7 @@ const Exams = () => {
                       {e.is_published ? "Published" : "Draft"}
                     </Badge>
                   </div>
-                  {e.description && <p className="text-sm text-muted-foreground mt-1">{e.description}</p>}
+                  {e.description && <p className="text-sm text-muted-foreground mt-1 whitespace-pre-wrap break-words">{e.description}</p>}
                   <p className="text-xs text-muted-foreground mt-2">
                     Unlocked for: {unlockedLabel(e.id)} · {e.duration_minutes} min · pass {e.pass_percentage}%
                   </p>
@@ -467,7 +467,7 @@ const Exams = () => {
             </div>
             <div>
               <Label>Instructions (optional)</Label>
-              <Textarea value={form.description} onChange={(ev) => setForm({ ...form, description: ev.target.value })} />
+              <Textarea rows={8} className="font-mono text-sm whitespace-pre-wrap" placeholder={"Instructions — paste freely. Line breaks, numbered lists and bullets are preserved.\n\n1. Read each question carefully.\n2. Only one answer is correct.\n\n• Do not refresh the page."} value={form.description} onChange={(ev) => setForm({ ...form, description: ev.target.value })} />
             </div>
             <div>
               <BatchMultiSelect
