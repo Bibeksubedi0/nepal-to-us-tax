@@ -1,4 +1,4 @@
-// Sends transactional payment emails via Resend gateway.
+// Sends transactional payment emails via the Resend API.
 // Handles 4 events:
 //   - "submitted_student": student confirmation
 //   - "submitted_admin":   admin alert (with screenshot attached)
@@ -11,7 +11,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const GATEWAY_URL = "https://connector-gateway.lovable.dev/resend";
+const RESEND_URL = "https://api.resend.com/emails";
 const FROM = "Focus Academy <academy@focusyourfinance.com>";
 const ADMIN_EMAIL = "hello@focusyourfinance.com";
 const APP_URL = "https://academy.focusyourfinance.com";
@@ -130,12 +130,11 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY_1") ?? Deno.env.get("RESEND_API_KEY");
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const admin = createClient(SUPABASE_URL, SERVICE_KEY);
-    if (!LOVABLE_API_KEY || !RESEND_API_KEY) {
+    if (!RESEND_API_KEY) {
       return new Response(JSON.stringify({ error: "Email service not configured" }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -187,12 +186,11 @@ Deno.serve(async (req) => {
     const body: Record<string, unknown> = { from: FROM, to: [to], subject, html };
     if (attachments) body.attachments = attachments;
 
-    const r = await fetch(`${GATEWAY_URL}/emails`, {
+    const r = await fetch(RESEND_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${LOVABLE_API_KEY}`,
-        "X-Connection-Api-Key": RESEND_API_KEY,
+        "Authorization": `Bearer ${RESEND_API_KEY}`,
       },
       body: JSON.stringify(body),
     });

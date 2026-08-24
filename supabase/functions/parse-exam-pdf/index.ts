@@ -1,5 +1,5 @@
 // Admin-only: converts raw text extracted from a question-paper PDF into structured MCQs
-// using the Lovable AI gateway. Returns questions for admin review before saving.
+// using the Google Gemini API. Returns questions for admin review before saving.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 const cors = {
@@ -43,14 +43,15 @@ Deno.serve(async (req) => {
     if (text.length < 40) return json({ error: "Could not read any text from this PDF." }, 400);
     if (text.length > 120000) return json({ error: "PDF is too large. Split it into smaller files." }, 400);
 
-    const key = Deno.env.get("LOVABLE_API_KEY");
+    const key = Deno.env.get("GEMINI_API_KEY");
     if (!key) return json({ error: "AI is not configured" }, 500);
 
-    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    // Google's OpenAI-compatible endpoint: same request/response shape as the old gateway.
+    const res = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
       method: "POST",
       headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "gemini-2.5-flash",
         messages: [
           { role: "system", content: SYSTEM },
           { role: "user", content: `Extract all questions from this paper:\n\n${text}` },
@@ -88,7 +89,7 @@ Deno.serve(async (req) => {
     });
 
     if (res.status === 429) return json({ error: "AI rate limit reached. Try again shortly." }, 429);
-    if (res.status === 402) return json({ error: "AI credits exhausted. Add credits in Settings." }, 402);
+    if (res.status === 402) return json({ error: "AI quota exhausted. Check billing for the Gemini API key." }, 402);
     if (!res.ok) return json({ error: `AI error: ${await res.text()}` }, 502);
 
     const data = await res.json();

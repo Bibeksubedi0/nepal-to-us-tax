@@ -1,4 +1,4 @@
-// Generic admin-triggered email sender via Resend gateway. Logs every send to email_logs
+// Generic admin-triggered email sender via the Resend API. Logs every send to email_logs
 // and injects open/click tracking + optional CTA button.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
@@ -7,7 +7,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const GATEWAY_URL = "https://connector-gateway.lovable.dev/resend";
+const RESEND_URL = "https://api.resend.com/emails";
 const FROM = "Focus Academy <academy@focusyourfinance.com>";
 
 interface Recipient { id?: string | null; name?: string | null; email: string; inquiry_id?: string | null }
@@ -113,9 +113,8 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY_1") ?? Deno.env.get("RESEND_API_KEY");
-    if (!LOVABLE_API_KEY || !RESEND_API_KEY) {
+    if (!RESEND_API_KEY) {
       return new Response(JSON.stringify({ error: "Email service not configured" }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -191,12 +190,11 @@ Deno.serve(async (req) => {
         // Retry up to 3 times on 429 rate-limit
         for (let attempt = 0; attempt < 3; attempt++) {
           try {
-            const res = await fetch(`${GATEWAY_URL}/emails`, {
+            const res = await fetch(RESEND_URL, {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
-                Authorization: `Bearer ${LOVABLE_API_KEY}`,
-                "X-Connection-Api-Key": RESEND_API_KEY,
+                Authorization: `Bearer ${RESEND_API_KEY}`,
               },
               body: JSON.stringify({ from: FROM, to: [r.email], subject: payload.subject, html }),
             });

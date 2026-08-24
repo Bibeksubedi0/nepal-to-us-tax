@@ -69,9 +69,8 @@ Deno.serve(async (req) => {
 
   try {
     const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY_1") ?? Deno.env.get("RESEND_API_KEY");
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!RESEND_API_KEY || !LOVABLE_API_KEY) {
-      console.error("Missing RESEND_API_KEY or LOVABLE_API_KEY");
+    if (!RESEND_API_KEY) {
+      console.error("Missing RESEND_API_KEY");
       return new Response(JSON.stringify({ error: "Email service not configured" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -114,12 +113,11 @@ Deno.serve(async (req) => {
     const html = HTML_TEMPLATE.replaceAll("{{first_name}}", firstName);
     const text = TEXT_TEMPLATE.replaceAll("{{first_name}}", firstName);
 
-    const res = await fetch("https://connector-gateway.lovable.dev/resend/emails", {
+    const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "X-Connection-Api-Key": RESEND_API_KEY,
+        Authorization: `Bearer ${RESEND_API_KEY}`,
       },
       body: JSON.stringify({
         from: "Focus Academy <academy@focusyourfinance.com>",

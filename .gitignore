@@ -22,3 +22,28 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Supabase local files
+supabase/.temp/
+
+# Local database exports
+supabase/remote-data.sql
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Supabase local/temp files
+supabase/.temp/
+
+# Secrets and local files
+.env
+.env.*
+!.env.example
+supabase/.temp/
+migrate-storage.mjs
+supabase/remote-data.sql
