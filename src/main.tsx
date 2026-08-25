@@ -2,6 +2,20 @@ import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
 
+// Supabase recovery links land on the site root with the tokens in the URL hash
+// (`/#access_token=...&type=recovery`), so the landing page renders and supabase-js
+// consumes the hash before the reset screen ever mounts. Rewrite the path first --
+// this is synchronous, so it runs before supabase-js clears the hash and before the
+// router reads the URL.
+const recoveryHash = window.location.hash;
+if (recoveryHash.includes("type=recovery") && window.location.pathname !== "/reset-password") {
+  window.history.replaceState(
+    window.history.state,
+    "",
+    `/reset-password${window.location.search}${recoveryHash}`,
+  );
+}
+
 // App version — bump this whenever a deploy needs to invalidate stale client caches/sessions.
 const APP_VERSION = "2026-04-29-4";
 const VERSION_KEY = "fa_app_version";
