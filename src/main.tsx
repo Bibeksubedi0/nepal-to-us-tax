@@ -8,7 +8,9 @@ import "./index.css";
 // this is synchronous, so it runs before supabase-js clears the hash and before the
 // router reads the URL.
 const recoveryHash = window.location.hash;
-if (recoveryHash.includes("type=recovery") && window.location.pathname !== "/reset-password") {
+const isRecoveryCallback =
+  recoveryHash.includes("type=recovery") && recoveryHash.includes("access_token");
+if (isRecoveryCallback && window.location.pathname !== "/reset-password") {
   window.history.replaceState(
     window.history.state,
     "",
@@ -23,7 +25,11 @@ const VERSION_KEY = "fa_app_version";
 (async () => {
   try {
     const stored = localStorage.getItem(VERSION_KEY);
-    if (stored !== APP_VERSION) {
+    // Skip the cache-busting reload for a recovery callback: supabase-js clears the
+    // URL hash one await before it persists the session, so a reload landing in that
+    // gap loses both and the reset link dies. Normal visits are unaffected, and the
+    // version stays unset so the next normal load still busts the cache.
+    if (!isRecoveryCallback && stored !== APP_VERSION) {
       // Preserve Supabase auth tokens so users stay signed in after the reload.
       const preserved: Record<string, string> = {};
       for (let i = 0; i < localStorage.length; i++) {
